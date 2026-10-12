@@ -162,6 +162,7 @@ button{font-family:inherit;cursor:pointer;}
       <div class="lines" id="v-lines"></div>
       <div class="stat" id="v-stat"></div>
       <div style="margin-top:22px">
+        <button class="btn" id="btn-back" style="display:none">返回案牍 · 改判</button>
         <button class="btn ghost" id="btn-again">重验一遍</button>
       </div>
     </div>
@@ -405,7 +406,7 @@ function itemLock(it){
 }
 function slotReady(sl){
   if(!sl.need.every(hasFact)) return false;
-  if(sl.after){ return sl.after.every(slotCorrect); }
+  if(sl.after){ return sl.after.every(function(id){ return !!S.picks[id]; }); }
   return true;
 }
 function slotCorrect(id){
@@ -464,7 +465,7 @@ function renderDesk(){
     var ready=slotReady(sl);
     var d=document.createElement("div"); d.className="slot";
     var hint = ready ? "" : '<span style="color:var(--faint)">（须先取信：'+
-       (sl.need.length? sl.need.map(factShort).join("、"): "前六槽落定") +'）</span>';
+       (sl.need.length? sl.need.map(factShort).join("、"): "前六槽皆已落定") +'）</span>';
     var opts=sl.opts.map(function(o){
       var on=(S.picks[sl.id]===o.v)?" on":"";
       return '<button class="opt'+on+'" data-slot="'+sl.id+'" data-val="'+o.v+'"'+(ready?"":" disabled")+'>'+o.v+'</button>';
@@ -543,7 +544,10 @@ function showCard(entryId, it, allDone){
 /* ============================================================ 结案 */
 function doVerdict(){
   var allRight=SLOTS.every(slotCorrect);
-  var lines=SLOTS.map(function(sl){ return '<div class="li"><b>'+sl.label+'</b>：'+(S.picks[sl.id]||"—")+'</div>'; }).join("");
+  var lines=SLOTS.map(function(sl){
+    var bad=!allRight && !slotCorrect(sl.id);
+    return '<div class="li"><b>'+sl.label+'</b>：'+(S.picks[sl.id]||"—")+(bad?' <span class="tag doubt">存疑</span>':'')+'</div>';
+  }).join("");
   if(allRight){
     $("v-title").textContent="他杀焚尸";
     $("v-sub").textContent="妻与奸夫共谋，钉入囟门致死，纵火焚尸以掩其迹；宅中有人为之内应。";
@@ -551,10 +555,11 @@ function doVerdict(){
       '<div class="li" style="margin-top:10px;color:var(--ink2)">尸口鼻无灰、尸下土现鲜红，火焚于死后（《洗冤集录》）；剃髻得钉于囟门，致命之因在此；以赤油伞沃水验之，隐伤毕现，生前曾遭制伏（《梦溪笔谈》）。火可自燃，而本案火来骤急、用油有数，明为人为（《折狱龟鉴》《天工开物》）。凶徒借匠作之钉、宅中改置之壁，非独力所能为——必有内应。依《大明律》，谋杀一家者论死。</div>';
   }else{
     $("v-title").textContent="此判有疑";
-    $("v-sub").textContent="所填之判断，与案牍所载凿枘不合。";
+    $("v-sub").textContent="所填之判断，与案牍所载凿枘不合。标「存疑」者须再推。";
     $("v-lines").innerHTML=lines+
-      '<div class="li" style="margin-top:10px;color:var(--zhu)">提示：断语须由「验得之事实」推出，不可由供词想当然。</div>';
+      '<div class="li" style="margin-top:10px;color:var(--zhu)">提示：断语须由「验得之事实」推出，不可由供词想当然。点下方「返回案牍」即可改判，取信不必重来。</div>';
   }
+  $("btn-back").style.display = allRight ? "none" : "inline-block";
   $("v-stat").innerHTML='误检 <b>'+S.miss+'</b> 处　·　余时日 <b>'+S.day+'</b>　·　取信验目 <b>'+
      ITEMS.filter(function(x){return S.itemState[x.id]==="ok";}).length+'/12</b>';
   show("scr-verdict");
@@ -570,6 +575,7 @@ document.addEventListener("click",function(ev){
 
   if(id==="btn-start"){ S=fresh(); renderDesk(); show("scr-desk"); return; }
   if(id==="btn-again"){ S=fresh(); renderDesk(); show("scr-case"); return; }
+  if(id==="btn-back"){ renderDesk(); show("scr-desk"); return; }
   if(id==="btn-card-ok"){ closeMask("mask-card"); renderDesk(); return; }
   if(id==="btn-verdict"){ doVerdict(); return; }
 
