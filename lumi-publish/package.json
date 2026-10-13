@@ -1,0 +1,17 @@
+{
+  "name": "验火",
+  "version": "1.0.0",
+  "description": "以公有领域古籍为底、一案多典的断案科普解谜文游：三卷十二验目 × 十典，七槽结案。",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "dev:demo": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "build:demo": "node scripts/build.mjs",
+    "validate": "node scripts/validate.mjs"
+  },
+  "devDependencies": {
+    "@66rpg/lumimaker": "^0.1.54"
+  }
+}

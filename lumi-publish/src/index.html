@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>验火 · 古籍断案解谜</title>
+<style>
+:root{
+  --paper:#f4ece0; --card:#fbf6ec; --ink:#2a2724; --ink2:#6b6357;
+  --faint:#9a9080; --line:#ddd1bc; --line2:#c9bba2; --zhu:#a63a2a; --ok:#3c6b4a;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);}
+body{font-family:"Songti SC","SimSun","Noto Serif SC",serif;line-height:1.7;-webkit-text-size-adjust:100%;}
+.kai{font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+#app{max-width:760px;margin:0 auto;padding:18px 14px 64px;}
+.screen{display:none;} .screen.active{display:block;animation:fade .3s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+.brand{display:flex;align-items:baseline;gap:10px;border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:14px;flex-wrap:wrap;}
+.brand h1{font-size:20px;margin:0;letter-spacing:4px;}
+.who{font-size:12px;color:var(--faint);letter-spacing:1px;}
+
+h2.sec{font-size:15px;letter-spacing:2px;color:var(--zhu);margin:20px 0 8px;border-left:3px solid var(--zhu);padding-left:9px;}
+p{margin:7px 0;}
+.lead{font-size:14px;color:var(--ink2);}
+.case{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:12px 14px;font-size:14.5px;}
+.case .q{font-family:"Kaiti SC",serif;color:var(--ink);}
+.case .lbl{font-size:12px;color:var(--faint);letter-spacing:1px;display:block;margin-bottom:4px;}
+.src{font-size:12px;color:var(--faint);margin-top:8px;}
+
+button{font-family:inherit;cursor:pointer;}
+.btn{display:inline-block;border:1px solid var(--zhu);color:var(--zhu);background:transparent;border-radius:2px;padding:7px 16px;font-size:14px;letter-spacing:2px;transition:.15s;}
+.btn:hover{background:var(--zhu);color:var(--card);}
+.btn.ghost{border-color:var(--line2);color:var(--ink2);}
+.btn.ghost:hover{background:var(--line2);color:var(--ink);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.chip{border:1px solid var(--line2);border-radius:2px;padding:3px 10px;font-size:12.5px;color:var(--ink2);}
+.chip.zhu{color:var(--zhu);border-color:var(--zhu);}
+
+.volhead{display:flex;align-items:center;gap:9px;margin:20px 0 9px;}
+.volhead .vt{font-size:15px;letter-spacing:2px;font-weight:normal;}
+.volhead .vs{font-size:12px;color:var(--faint);}
+.volhead.lock .vt{color:var(--faint);}
+
+.board{display:flex;flex-direction:column;gap:8px;}
+.item{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:3px;}
+.item .n{font-family:"Kaiti SC",serif;font-size:12.5px;color:var(--faint);min-width:32px;flex-shrink:0;}
+.item .body{flex:1;min-width:0;}
+.item .ask{font-size:14.5px;}
+.item .res{font-size:12.5px;color:var(--ink2);margin-top:2px;word-break:break-word;}
+.item.ok{border-left-color:var(--ok);}
+.item.doubt{border-left-color:var(--zhu);}
+.item.partial{border-left-color:var(--zhu);}
+.item.lock{opacity:.6;}
+.item .act{flex-shrink:0;}
+.tag{font-size:11.5px;border-radius:2px;padding:1px 7px;letter-spacing:1px;white-space:nowrap;}
+.tag.ok{color:var(--ok);border:1px solid var(--ok);}
+.tag.doubt{color:var(--zhu);border:1px solid var(--zhu);}
+.tag.partial{color:var(--zhu);border:1px solid var(--zhu);}
+.tag.todo{color:var(--faint);border:1px solid var(--line2);}
+
+.slots{display:flex;flex-direction:column;gap:9px;margin-top:6px;}
+.slot{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:10px 12px;}
+.slot .st{font-size:13.5px;color:var(--ink2);margin-bottom:7px;}
+.slot .st b{color:var(--ink);font-weight:normal;}
+.opts{display:flex;flex-wrap:wrap;gap:7px;}
+.opt{border:1px solid var(--line2);background:transparent;color:var(--ink2);border-radius:2px;padding:5px 12px;font-size:13.5px;font-family:"Kaiti SC",serif;}
+.opt.on{border-color:var(--zhu);color:var(--zhu);box-shadow:0 0 0 2px rgba(166,58,42,.12);}
+.opt:disabled{opacity:.38;cursor:not-allowed;}
+
+.foot{margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.msg{font-size:13px;color:var(--zhu);}
+
+.mask{position:fixed;inset:0;background:rgba(42,39,36,.42);display:none;align-items:flex-end;justify-content:center;z-index:20;padding:0;}
+.mask.on{display:flex;}
+.sheet{background:var(--paper);width:100%;max-width:760px;max-height:88vh;overflow:auto;border-radius:8px 8px 0 0;padding:16px 14px 26px;animation:up .28s ease;}
+@keyframes up{from{transform:translateY(24px);opacity:.6;}to{transform:none;opacity:1;}}
+.sheet .hd{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;}
+.sheet .hd h3{margin:0;font-size:16px;letter-spacing:2px;}
+.x{border:none;background:transparent;font-size:22px;color:var(--faint);line-height:1;padding:0 4px;}
+
+.shelf{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.bk{text-align:left;border:1px solid var(--line);background:var(--card);border-radius:3px;padding:9px 11px;font-family:inherit;color:var(--ink);}
+.bk:disabled{opacity:.45;cursor:not-allowed;}
+.bk .bn{font-size:14.5px;font-family:"Kaiti SC",serif;}
+.bk .bd{font-size:11.5px;color:var(--faint);margin-top:2px;}
+.bk.on{border-color:var(--zhu);box-shadow:0 0 0 2px rgba(166,58,42,.12);}
+
+.entries{display:flex;flex-direction:column;gap:7px;margin-top:10px;}
+.ent{text-align:left;border:1px solid var(--line2);background:var(--card);border-radius:2px;padding:9px 11px;font-family:inherit;color:var(--ink);font-size:13.5px;}
+.ent:disabled{opacity:.42;cursor:not-allowed;}
+.ent .et{font-family:"Kaiti SC",serif;font-size:14.5px;}
+.ent .es{font-size:11.5px;color:var(--faint);}
+
+.card{background:var(--card);border:1px solid var(--line2);border-radius:3px;padding:14px 16px;margin-top:12px;}
+.card .ct{font-size:13px;color:var(--zhu);letter-spacing:1px;margin-bottom:8px;}
+.card .cq{font-family:"Kaiti SC",serif;font-size:16px;line-height:2;color:var(--ink);border-left:3px solid var(--line2);padding-left:12px;margin:10px 0;}
+.card .cg{font-size:14px;color:var(--ink2);}
+.card .cs{font-size:13px;color:var(--ok);margin-top:9px;border-top:1px dashed var(--line2);padding-top:8px;}
+.card .cs .k{color:var(--faint);font-size:11.5px;letter-spacing:1px;}
+.card .cy{font-size:13.5px;color:var(--zhu);margin-top:10px;}
+
+.verdict{text-align:center;padding:6px 0;}
+.verdict .vh{font-size:24px;letter-spacing:8px;color:var(--zhu);margin:14px 0 6px;}
+.verdict .vd{font-size:14px;color:var(--ink2);}
+.verdict .lines{text-align:left;background:var(--card);border:1px solid var(--line);border-radius:3px;padding:12px 14px;margin:16px 0;font-size:14px;}
+.verdict .lines .li{margin:6px 0;}
+.verdict .lines .li b{color:var(--zhu);font-weight:normal;font-family:"Kaiti SC",serif;}
+.stat{display:inline-block;margin:0 8px;font-size:13px;color:var(--ink2);}
+.btn.off{opacity:.45;}
+#btn-reset{position:fixed;right:9px;bottom:9px;z-index:60;background:none;border:0;padding:3px 6px;
+  font:11px/1.5 "Songti SC",serif;color:var(--faint);opacity:.42;cursor:pointer;letter-spacing:1px;}
+#btn-reset:hover{opacity:.95;text-decoration:underline;}
+.bk.hint{box-shadow:0 0 0 2px rgba(60,107,74,.22);}
+.ent.hint{box-shadow:0 0 0 2px rgba(60,107,74,.22);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <button id="btn-reset" title="清空存档，从案由重新开始">重置进度</button>
+
+  <!-- 案由 -->
+  <section class="screen active" id="scr-case">
+    <div class="brand"><h1>验火</h1><span class="who">提刑司 · 验官</span></div>
+    <p class="lead">你是提刑司的验官。火宅一案，一具焦尸。火，是烧死了他，还是替他遮了别的死法？</p>
+    <div class="case">
+      <span class="lbl">案由 · 原本</span>
+      <div class="q">庄遵为扬州刺史，巡行部内，忽闻哭声，惧而不哀。驻车问之，答曰：「夫遭火烧死。」遵令吏守其尸，乃有蝇集于首，披髻视之，得铁钉焉。</div>
+      <div class="src">——《折狱龟鉴 · 庄遵疑哭》（原文）</div>
+    </div>
+    <p class="lead" style="margin-top:14px">哭声「惧而不哀」，火宅必有隐情。此案之学问，散在诸部古籍之中——你要<b>翻对书、找对条目</b>，才敢下一个断语。</p>
+    <div class="case" style="margin-top:10px">
+      <span class="lbl">验断三卷</span>
+      <div><b>卷一 · 验尸</b>：火有没有烧死他？致命之因是什么？</div>
+      <div><b>卷二 · 验火</b>：火从何起？可自燃否？曾否先杀而后焚？</div>
+      <div><b>卷三 · 验心</b>：凶器何人？用油几何？供词何伪？谁为内应？</div>
+      <div class="src">每一目，须自十部古籍中寻得<b>该翻的那一卷</b>；翻错书、选错条，皆算误检，损时一日。</div>
+    </div>
+    <div class="foot"><button class="btn" id="btn-start">升堂验尸</button></div>
+  </section>
+
+  <!-- 案牍 -->
+  <section class="screen" id="scr-desk">
+    <div class="brand"><h1>验火</h1><span class="who">案牍 · 十二验目</span></div>
+    <div class="topbar">
+      <span class="chip" id="chip-prog">取信：0 / 12</span>
+      <span class="chip zhu" id="chip-day">时日：8</span>
+    </div>
+    <div id="vols"></div>
+
+    <h2 class="sec">结案 · 七槽（须诸验取信方可落判）</h2>
+    <div class="slots" id="slots"></div>
+
+    <div class="foot">
+      <button class="btn" id="btn-verdict">落判</button>
+      <span class="msg" id="msg"></span>
+    </div>
+  </section>
+
+  <!-- 判词 -->
+  <section class="screen" id="scr-verdict">
+    <div class="brand"><h1>验火</h1><span class="who">判词</span></div>
+    <div class="verdict">
+      <div class="vh" id="v-title">他杀焚尸</div>
+      <div class="vd" id="v-sub"></div>
+      <div class="lines" id="v-lines"></div>
+      <div class="stat" id="v-stat"></div>
+      <div style="margin-top:22px">
+        <button class="btn" id="btn-back" style="display:none">返回案牍 · 改判</button>
+        <button class="btn ghost" id="btn-again">重验一遍</button>
+      </div>
+    </div>
+    <p class="src" style="text-align:center">全部断案引文取自公有领域古籍（殆知阁文本），逐句可溯源 · 单文件 · 离线可玩</p>
+  </section>
+
+</div>
+
+<!-- 掌故库 -->
+<div class="mask" id="mask-shelf">
+  <div class="sheet">
+    <div class="hd"><h3 id="shelf-title">查阅掌故库</h3><button class="x" data-close="mask-shelf">×</button></div>
+    <div class="msg" id="shelf-msg" style="margin-bottom:8px"></div>
+    <div class="shelf" id="shelf"></div>
+    <div id="entries-wrap" style="display:none;">
+      <h2 class="sec" id="entries-head">条目</h2>
+      <div class="entries" id="entries"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 原文卡 -->
+<div class="mask" id="mask-card">
+  <div class="sheet">
+    <div class="hd"><h3>原文卡</h3><button class="x" data-close="mask-card">×</button></div>
+    <div class="card" id="card"></div>
+    <div class="foot"><button class="btn" id="btn-card-ok">记入案牍</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   数据：古籍原文一律照录公有领域底本（guji-archive），
+        白话、原理、断语为今人所撰。
+   ============================================================ */
+var BOOKS = [
+  { id:"xyjl", name:"洗冤集录", sub:"医藏 · 检验之书", entries:[
+      { id:"e-fire",  title:"火死 · 口鼻烟灰" },
+      { id:"e-nail",  title:"剃髻 · 验囟门钉" },
+      { id:"e-blood", title:"酽醋酒泼 · 血入地" },
+      { id:"e-bone",  title:"检骨 · 蒸骨红油伞" }
+  ]},
+  { id:"mxsb", name:"梦溪笔谈", sub:"子藏 · 笔记", entries:[
+      { id:"e-umb", title:"李处厚 · 赤油伞法" },
+      { id:"e-type", title:"活字板 · 胶泥刻字" }
+  ]},
+  { id:"zygj", name:"折狱龟鉴", sub:"法家 · 案例", entries:[
+      { id:"e-cheng", title:"程琳图火 · 火有自燃" },
+      { id:"e-oil",   title:"强至油幕 · 得湿则燔" },
+      { id:"e-linan", title:"李南公 · 辨伪伤" },
+      { id:"e-qian",  title:"钱冶 · 火所发床足" }
+  ]},
+  { id:"yzfs", name:"营造法式", sub:"史藏 · 营造", entries:[
+      { id:"e-wall", title:"壕寨 · 筑墙之制" },
+      { id:"e-cai",  title:"大木 · 材有八等" }
+  ]},
+  { id:"zgj", name:"考工记", sub:"儒藏 · 匠制", entries:[
+      { id:"e-six",    title:"冶氏 · 金有六齐" },
+      { id:"e-cheren", title:"车人 · 车制" }
+  ]},
+  { id:"tgkw", name:"天工开物", sub:"子藏 · 工造", entries:[
+      { id:"e-oilrate", title:"膏液 · 收子榨油" },
+      { id:"e-coin",    title:"铸钱 · 铅铜高下" }
+  ]},
+  { id:"jzss", name:"九章算术", sub:"子藏 · 算法", entries:[
+      { id:"e-ratio", title:"粟米 · 今有术" },
+      { id:"e-gougu", title:"勾股 · 测望" }
+  ]},
+  { id:"qmys", name:"齐民要术", sub:"子藏 · 农家", entries:[
+      { id:"e-candle", title:"作假蜡烛法" },
+      { id:"e-glue",   title:"煮胶法" }
+  ]},
+  { id:"zy", name:"周易", sub:"易藏 · 卜筮", entries:[
+      { id:"e-ligua",  title:"离卦 · 九四爻辞" },
+      { id:"e-xi",  title:"系辞 · 观象" }
+  ]},
+  { id:"tybs", name:"棠阴比事", sub:"法家 · 案例", entries:[
+      { id:"e-law",   title:"谨按大明律 · 杀一家" },
+      { id:"e-zhuju", title:"张举猪灰 · 烧猪验口" }
+  ]}
+];
+
+/* 原文卡（正解条目） */
+var CARDS = {
+  "e-fire":  { title:"《洗冤集录 · 火死》",
+    quote:"凡生前被火烧死者，其尸口鼻内有烟灰，两手脚皆拳缩。缘其人未死前被火逼奔挣，口开气脉往来，故呼吸烟灰入口鼻内。若死后烧者，其人虽手足拳缩，口内即无烟灰。",
+    gist:"生前被火烧死的人，口鼻会吸进烟灰；死后才被烧的，口鼻没有烟灰。",
+    sci:"生前只要还在呼吸，烟火就随气流被吸入呼吸道；死后呼吸停止，烟灰进不去。这是判「生前烧」还是「死后焚」的硬判据。" },
+  "e-nail":  { title:"《洗冤集录 · 剃髻验钉》",
+    quote:"应检验死人，诸处伤损并无，不是病状，难为定验者，先须勒下骨肉次第等人状讫，然后剃除死人发髻，恐生前被人将刃物钉入囟门或脑中，杀害性命。",
+    gist:"身上查不出伤、又不像病死的，要剃开头发，细看囟门有没有被钉进利器。",
+    sci:"囟门（头顶骨缝处）是颅骨最薄弱处，钉器自此入脑，体表几乎不留痕，极易被误判为「火烧死」。" },
+  "e-blood": { title:"《洗冤集录 · 酽醋酒泼》",
+    quote:"又若被刀杀死，却作火烧死者，勒仵作拾起白骨，扇去地下灰尘，于尸首下净地上，用酽米醋酒泼，若是杀死，即有血入地，鲜红色。",
+    gist:"疑是「先杀后焚」的，在尸下净地泼酽醋与酒，若地现鲜红，即是血渗入土。",
+    sci:"血中血红素遇酸显色；人死血不下沉，被杀者血渗入土，故泼酸则现。用来分辨「杀后移尸焚」。" },
+  "e-umb":   { title:"《梦溪笔谈 · 李处厚验伤》",
+    quote:"以新赤油繖日中覆之，以水沃其尸，其迹必见。",
+    gist:"验伤看不出痕迹时，用赤油伞在日光下罩住尸身、再泼水，伤痕就会显现。",
+    sci:"红伞滤去杂色光，令皮肤显出反差；水膜又使皮下出血的色差更清楚——古人已懂用「光」来验伤。" },
+  "e-linan": { title:"《折狱龟鉴 · 李南公辨伪伤》",
+    quote:"南方有榉柳，以叶涂肤，则青赤如殴伤者；剥其皮，横置肤上，以火熨之，则如棓伤者，水洗不落。但殴伤者血聚则硬，而伪者不然。",
+    gist:"榉柳叶汁能造出似殴伤的假痕；真伤血聚则硬，假的不会硬。",
+    sci:"真伤处组织水肿、按之发硬；植物色素只染表皮，不肿不硬。凭「硬不硬」即可辨伪。" },
+  "e-cheng": { title:"《折狱龟鉴 · 程琳图火》",
+    quote:"命工图火所经。而后宫人多而居隘，其烓灶近版壁，岁久，燥而焚。曰：「此岂一日火哉！」",
+    gist:"画出火烧过的路线，查出是人多屋窄、灶台紧贴木壁、日久烘燥而自燃。",
+    sci:"木材长期受烘会炭化，堆积的油脂、油布也会氧化蓄热而自燃。所以「着火」未必有人放火，须先分清自燃与纵火。" },
+  "e-oil":   { title:"《折狱龟鉴 · 强至油幕》",
+    quote:"制幕必杂他药，相因既久，得湿则燔。",
+    gist:"油布油幕存放久了，一受潮就会自己烧起来。",
+    sci:"油脂（尤其混过药的）在堆积中氧化放热，热散不掉便蓄温自燃——这是「堆存自然」。" },
+  "e-wall":  { title:"《营造法式 · 筑墙之制》",
+    quote:"筑墙之制，每墙厚三尺则高九尺，其上斜收比厚减半；若高增三尺则厚加一尺，减亦如之。",
+    gist:"墙的高与厚都有定法，必须依制而成，不可随意。",
+    sci:"营造有「制」：承重、厚薄、间距皆按法式。版壁与灶相距过近、又非依制所为，即属人为改置——可为纵火预谋。" },
+  "e-six":   { title:"《考工记 · 金有六齐》",
+    quote:"金有六齐：六分其金而锡居一，谓之钟鼎之齐；五分其金而锡居一，谓之斧斤之齐；四分其金而锡居一，谓之戈戟之齐……",
+    gist:"铜锡配比不同，造出的器物刚柔、用途各异。",
+    sci:"合金配比决定铁器刚柔与用途。由钉之质地、形制，可推其非民间常用，乃匠作之钉。" },
+  "e-oilrate":{ title:"《天工开物 · 膏液》",
+    quote:"收子榨油，每石得四十斤余，其枯用以肥田。",
+    gist:"胡麻（脂麻）一石可榨油四十余斤。",
+    sci:"出油率是定数：由用去之油，可反推耗去多少石胡麻，与购油、购麻之账相对，锁定用油之人。" },
+  "e-ratio": { title:"《九章算术 · 粟米 · 今有术》",
+    quote:"今有术曰：以所有数乘所求率为实，以所有率为法，实如法而一。",
+    gist:"已知比例，按「所有数 × 所求率 ÷ 所有率」即可换算。",
+    sci:"比例推算法——把「一石出油四十斤」的定率，换算成实际用油／用麻之数。" },
+  "e-candle":{ title:"《齐民要术 · 作假蜡烛法》",
+    quote:"作假蜡烛法：蒲熟时，多收蒲台。削肥松，大如指，以为心。烂布缠之。融羊、牛脂，灌於蒲台中……融蜡灌之。",
+    gist:"以牛羊脂与蜡制烛；烛之燃烧有定速。",
+    sci:"蜡烛成分固定、燃速恒定，由残烛长短可反推点燃时刻——与供词所云时辰相校。" },
+  "e-ligua": { title:"《周易 · 离卦 · 九四》",
+    quote:"九四，突如，其来如，焚如，死如，弃如。",
+    gist:"《离》九四言火突而来、焚而死——火来骤急。",
+    sci:"以《易》比况火势：骤然而起，非日久积渐之自燃。此本案火「来骤」，与自燃之缓正相反。" },
+  "e-law":   { title:"《棠阴比事 · 谨按大明律》",
+    quote:"谨按大明律云：杀一家非死罪三人者凌迟处死，妻子流二千里，入十恶不道之条。",
+    gist:"《大明律》：杀一家非死罪三人者，凌迟处死。",
+    sci:"检验有程序、定罪有律条。初检若漏报、仵作若受财，即是有人主使——案中必有内应。" }
+};
+
+/* 十二验目：need 为「须翻对的典籍 + 条目」（可两部合验） */
+var ITEMS = [
+  /* 卷一 · 验尸 */
+  { id:"i1", vol:1, n:"目一", from:"仵作", ask:"尸身口鼻，可有余灰？",
+    need:[{book:"xyjl",entry:"e-fire"}], yields:"f1", req:[],
+    fact:"口鼻无烟灰——火焚于死后，火非死因" },
+  { id:"i2", vol:1, n:"目二", from:"仵作", ask:"顶心囟门，可藏凶器？",
+    need:[{book:"xyjl",entry:"e-nail"}], yields:"f2", req:["f1"],
+    fact:"剃髻得钉于囟门——致命之因，即此钉" },
+  { id:"i3", vol:1, n:"目三", from:"仵作", ask:"隐处可有暗伤？",
+    need:[{book:"mxsb",entry:"e-umb"}], yields:"f3", req:[],
+    fact:"隐现淤伤——生前曾遭人制伏" },
+  { id:"i4", vol:1, n:"目四", from:"虞候", ask:"伤痕真伪，可曾伪造？",
+    need:[{book:"zygj",entry:"e-linan"}], yields:"f4", req:[],
+    fact:"榉柳假伤——有人栽赃，欲嫁祸于斗殴" },
+
+  /* 卷二 · 验火 */
+  { id:"i5", vol:2, n:"目五", from:"都料匠", ask:"此火，可自燃否？",
+    need:[{book:"zygj",entry:"e-cheng"}], yields:"f5", req:[],
+    fact:"灶近版壁、日久燥而焚——火有自燃之因，未可径断天灾" },
+  { id:"i6", vol:2, n:"目六", from:"都料匠", ask:"宅中油物，可自烧否？",
+    need:[{book:"zygj",entry:"e-oil"}], yields:"f6", req:[],
+    fact:"积油得湿则燔——油物可自燃，亦可为人所借" },
+  { id:"i7", vol:2, n:"目七", from:"仵作", ask:"尸下净土，可曾变色？",
+    need:[{book:"xyjl",entry:"e-blood"}], yields:"f7", req:["f2"],
+    fact:"酽醋酒泼地现鲜红——先杀而后焚" },
+  { id:"i8", vol:2, n:"目八", from:"都料匠", ask:"版壁与灶之距，可依制否？",
+    need:[{book:"yzfs",entry:"e-wall"}], yields:"f8", req:[],
+    fact:"版壁与灶过近、非依制所为——有人改置，为纵火之备" },
+
+  /* 卷三 · 验心（含两部合验） */
+  { id:"i9", vol:3, n:"目九", from:"匠师", ask:"此钉，何工所制？",
+    need:[{book:"zgj",entry:"e-six"}], yields:"f9", req:["f2"],
+    fact:"其钉刚柔合斧斤之齐——乃匠作大钉，凶徒通匠作、常入宅" },
+  { id:"i10", vol:3, n:"目十", from:"算博士", ask:"宅中所用油，其量几何？", needHint:"算学",
+    need:[{book:"tgkw",entry:"e-oilrate"},{book:"jzss",entry:"e-ratio"}], yields:"f10", req:["f6"],
+    fact:"按出油率与比例核计，用油之数与某人购油之账相合——锁定用油者" },
+  { id:"i11", vol:3, n:"目十一", from:"卜者", ask:"火起之时与势，可合供词否？", needHint:"卜筮之书",
+    need:[{book:"qmys",entry:"e-candle"},{book:"zy",entry:"e-ligua"}], yields:"f11", req:[],
+    fact:"残烛所推之时与供词相左，且火来骤急、非积渐自燃——妻之供词伪" },
+  { id:"i12", vol:3, n:"目十二", from:"老吏", ask:"初检呈报，可曾可疑？",
+    need:[{book:"tybs",entry:"e-law"}], yields:"f12", req:["f2"],
+    fact:"初检漏报、仵作受财——案中有人主使，必有内应" }
+];
+
+/* 结案七槽 */
+var SLOTS = [
+  { id:"s1", label:"焚尸先后", need:["f1","f7"],
+    opts:[{v:"死后焚尸",ok:true},{v:"生前烧死",ok:false},{v:"自焚而死",ok:false}] },
+  { id:"s2", label:"致命之因", need:["f2","f3"],
+    opts:[{v:"钉入囟门",ok:true},{v:"火烧致死",ok:false},{v:"病卒",ok:false}] },
+  { id:"s3", label:"火起之因", need:["f5","f6","f11"],
+    opts:[{v:"人为纵火灭迹",ok:true},{v:"天灾自燃",ok:false},{v:"不慎失火",ok:false}] },
+  { id:"s4", label:"凶器", need:["f9"],
+    opts:[{v:"匠作大钉",ok:true},{v:"厨刀",ok:false},{v:"绳索",ok:false}] },
+  { id:"s5", label:"主谋", need:["f4","f10"],
+    opts:[{v:"其妻与奸夫",ok:true},{v:"独行之盗",ok:false},{v:"州吏",ok:false}] },
+  { id:"s6", label:"内应", need:["f8","f12"],
+    opts:[{v:"宅中之人",ok:true},{v:"并无内应",ok:false},{v:"邻人",ok:false}] },
+  { id:"s7", label:"引律", need:[], after:["s1","s2","s3","s4","s5","s6"],
+    opts:[{v:"依《大明律》谋杀（杀一家者论死）",ok:true},{v:"止坐失火",ok:false},{v:"天灾勿论",ok:false}] }
+];
+
+var VOLS = [
+  { v:1, t:"卷一 · 验尸", s:"火有没有烧死他？致命之因是什么？" },
+  { v:2, t:"卷二 · 验火", s:"火从何起？可自燃否？曾否先杀而后焚？" },
+  { v:3, t:"卷三 · 验心", s:"凶器何人？用油几何？供词何伪？谁为内应？" }
+];
+
+/* ============================================================ 状态 */
+var S=null;
+function fresh(){ return { day:8, miss:0, facts:{}, itemState:{}, itemNeed:{}, picks:{}, help:{}, curItem:null, curBook:null, scr:"scr-case" }; }
+
+/* ============================================================ 存档 */
+var SAVE_KEY="yanhuo.save.v1";
+function save(){ try{ if(S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+function loadSave(){
+  try{
+    var raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+    var d=JSON.parse(raw); if(!d||typeof d!=="object"||!d.facts) return false;
+    var base=fresh();
+    for(var k in base){ if(!(k in d)) d[k]=base[k]; }
+    S=d; return true;
+  }catch(e){ return false; }
+}
+
+/* ============================================================ 工具 */
+function $(id){ return document.getElementById(id); }
+function show(id){
+  var a=document.querySelectorAll(".screen");
+  for(var i=0;i<a.length;i++) a[i].classList.remove("active");
+  $(id).classList.add("active"); window.scrollTo(0,0);
+  if(S){ S.scr=id; save(); }
+}
+function openMask(id){ $(id).classList.add("on"); }
+function closeMask(id){ $(id).classList.remove("on"); }
+function bookById(id){ for(var i=0;i<BOOKS.length;i++) if(BOOKS[i].id===id) return BOOKS[i]; return null; }
+function itemById(id){ for(var i=0;i<ITEMS.length;i++) if(ITEMS[i].id===id) return ITEMS[i]; return null; }
+function slotById(id){ for(var i=0;i<SLOTS.length;i++) if(SLOTS[i].id===id) return SLOTS[i]; return null; }
+function hasFact(f){ return S.facts[f]===true; }
+function factShort(f){
+  var m={f1:"口鼻无灰",f2:"囟门得钉",f3:"隐现淤伤",f4:"榉柳假伤",f5:"火有自燃之因",f6:"积油得湿则燔",
+         f7:"地现鲜红",f8:"版壁非依制",f9:"匠作大钉",f10:"油账相合",f11:"供词相左",f12:"初检漏报"};
+  return m[f]||f;
+}
+function volDone(v){ return ITEMS.filter(function(x){return x.vol===v;}).every(function(x){return S.itemState[x.id]==="ok";}); }
+function itemLock(it){
+  if(it.vol>1 && !volDone(it.vol-1)) return "须先验毕"+(it.vol-1===1?"卷一":"卷二");
+  for(var i=0;i<it.req.length;i++){ if(!hasFact(it.req[i])) return "须先验定「"+factShort(it.req[i])+"」"; }
+  return null;
+}
+function slotReady(sl){
+  if(!sl.need.every(hasFact)) return false;
+  if(sl.after){ return sl.after.every(function(id){ return !!S.picks[id]; }); }
+  return true;
+}
+function slotCorrect(id){
+  var sl=slotById(id); if(!sl) return false;
+  var p=S.picks[id], o=null;
+  sl.opts.forEach(function(x){ if(x.v===p) o=x; });
+  return !!(o && o.ok);
+}
+function allSlotsPicked(){ return SLOTS.every(function(sl){ return !!S.picks[sl.id]; }); }
+function slotLack(sl){
+  var miss=sl.need.filter(function(f){ return !hasFact(f); });
+  if(miss.length) return "须先取信："+miss.map(factShort).join("、");
+  if(sl.after){
+    var w=sl.after.filter(function(id){ return !S.picks[id]; });
+    if(w.length) return "须先定前六槽（尚缺："+w.map(function(id){ return slotById(id).label; }).join("、")+"）";
+  }
+  return "尚不可定";
+}
+function verdictLackText(){
+  var lack=SLOTS.filter(function(sl){ return !S.picks[sl.id]; });
+  return "尚差 "+lack.length+" 槽："+lack.map(function(sl){ return sl.label+"（"+slotLack(sl)+"）"; }).join("；");
+}
+
+/* ============================================================ 渲染 · 案牍 */
+function renderDesk(){
+  var prog=ITEMS.filter(function(x){return S.itemState[x.id]==="ok";}).length;
+  $("chip-prog").textContent="取信："+prog+" / 12";
+  $("chip-day").textContent="时日："+S.day;
+
+  var host=$("vols"); host.innerHTML="";
+  VOLS.forEach(function(V){
+    var prevOk = (V.v===1) ? true : volDone(V.v-1);
+    var head=document.createElement("div");
+    head.className="volhead"+(prevOk?"":" lock");
+    head.innerHTML='<div class="vt">'+V.t+'</div><div class="vs">'+(prevOk?V.s:"未启 · 须先验毕前卷")+'</div>';
+    host.appendChild(head);
+
+    var board=document.createElement("div"); board.className="board";
+    ITEMS.filter(function(x){return x.vol===V.v;}).forEach(function(it){
+      var st=S.itemState[it.id]||"todo";
+      var lock=itemLock(it);
+      var div=document.createElement("div");
+      div.className="item "+(st==="ok"?"ok":(st==="doubt"?"doubt":(st==="partial"?"partial":"")))+(lock?" lock":"");
+      var tag = st==="ok"?'<span class="tag ok">取信</span>'
+              : st==="partial"?'<span class="tag partial">合验中</span>'
+              : st==="doubt"?'<span class="tag doubt">存疑</span>'
+              : '<span class="tag todo">待验</span>';
+      var res;
+      if(st==="ok") res=it.fact;
+      else if(st==="partial"){
+        var got=(S.itemNeed[it.id]||[]).length;
+        res="已得 "+got+" 部典籍之据，尚需佐以"+(it.needHint?("「"+it.needHint+"」"):"另一部典籍");
+      }
+      else if(st==="doubt") res="所翻非其书、非其条，须另寻";
+      else if(lock) res=lock;
+      else res="翻开掌故库，寻其验法";
+      var act;
+      if(st==="ok") act=tag;
+      else if(st==="partial") act=tag+' <button class="btn ghost" data-verify="'+it.id+'">续验</button>';
+      else if(st==="doubt") act=tag+' <button class="btn ghost" data-verify="'+it.id+'"'+(lock?" disabled":"")+'>再翻</button>';
+      else act='<button class="btn ghost" data-verify="'+it.id+'"'+(lock?" disabled":"")+'>翻书</button>';
+      div.innerHTML='<span class="n">'+it.n+'</span><div class="body"><div class="ask">'+it.ask+'</div><div class="res">'+res+'</div></div><div class="act">'+act+'</div>';
+      board.appendChild(div);
+    });
+    host.appendChild(board);
+  });
+
+  var s=$("slots"); s.innerHTML="";
+  SLOTS.forEach(function(sl){
+    var ready=slotReady(sl);
+    var d=document.createElement("div"); d.className="slot";
+    var hint = ready ? "" : '<span style="color:var(--faint)">（'+slotLack(sl)+'）</span>';
+    var opts=sl.opts.map(function(o){
+      var on=(S.picks[sl.id]===o.v)?" on":"";
+      return '<button class="opt'+on+'" data-slot="'+sl.id+'" data-val="'+o.v+'"'+(ready?"":" disabled")+'>'+o.v+'</button>';
+    }).join("");
+    d.innerHTML='<div class="st"><b>'+sl.label+'</b>　'+hint+'</div><div class="opts">'+opts+'</div>';
+    s.appendChild(d);
+  });
+  var btnV=$("btn-verdict"), msgEl=$("msg"), done=allSlotsPicked();
+  btnV.disabled=false;
+  if(done){ btnV.classList.remove("off"); btnV.title=""; if(msgEl) msgEl.textContent=""; }
+  else{
+    var lack=SLOTS.filter(function(sl){ return !S.picks[sl.id]; });
+    var full=verdictLackText();
+    btnV.classList.add("off"); btnV.title=full;
+    if(msgEl) msgEl.textContent="尚差 "+lack.length+" 槽："+lack[0].label+"（"+slotLack(lack[0])+"）"+(lack.length>1?" 等":"");
+  }
+}
+
+/* ============================================================ 渲染 · 掌故库 */
+function openShelf(itemId){
+  S.curItem=itemId; S.curBook=null;
+  var it=itemById(itemId);
+  $("shelf-title").textContent=it.n+" · "+it.ask;
+  $("shelf-msg").textContent="";
+  var got=(S.itemNeed[itemId]||[]).length;
+  if(it.need.length>1) $("shelf-msg").textContent="此目须合"+it.need.length+"部典籍验之（已得 "+got+" 部）。";
+  $("entries-wrap").style.display="none";
+  renderShelf(); openMask("mask-shelf");
+}
+function renderShelf(){
+  var g=$("shelf"); g.innerHTML="";
+  var it=itemById(S.curItem), hlv=S.help[S.curItem]||0, needBook={};
+  if(it) it.need.forEach(function(n){ needBook[n.book]=true; });
+  var showBookHint = (hlv>=3);
+  BOOKS.forEach(function(b){
+    var btn=document.createElement("button");
+    var tip = (showBookHint && needBook[b.id]);
+    btn.className="bk"+(S.curBook===b.id?" on":"")+(tip?" hint":""); btn.setAttribute("data-book",b.id);
+    btn.innerHTML='<div class="bn">'+b.name+(tip?' <span style="color:var(--ok)">◈</span>':'')+'</div><div class="bd">'+b.sub+'</div>';
+    g.appendChild(btn);
+  });
+}
+function renderEntries(){
+  var b=bookById(S.curBook);
+  $("entries-wrap").style.display="block";
+  $("entries-head").textContent=b.name+" · 可查条目";
+  var it=itemById(S.curItem), hlv=S.help[S.curItem]||0, needEnt={};
+  if(it) it.need.forEach(function(n){ if(n.book===S.curBook) needEnt[n.entry]=true; });
+  var showEntHint=(hlv>=5);
+  var g=$("entries"); g.innerHTML="";
+  b.entries.forEach(function(e){
+    var btn=document.createElement("button");
+    var tip=(showEntHint && needEnt[e.id]);
+    btn.className="ent"+(tip?" hint":""); btn.setAttribute("data-entry",e.id);
+    btn.innerHTML='<div class="et">'+e.title+(tip?' <span style="color:var(--ok)">◈</span>':'')+'</div>';
+    g.appendChild(btn);
+  });
+}
+
+/* ============================================================ 校验 */
+function pickEntry(entryId){
+  var it=itemById(S.curItem);
+  var isNeed=false;
+  it.need.forEach(function(n){ if(n.book===S.curBook && n.entry===entryId) isNeed=true; });
+  var done=S.itemNeed[it.id]||[];
+
+  /* 回头确认"已得"的同一条目：非误检，不损时日，不改状态 */
+  if(isNeed && done.indexOf(entryId)>=0){
+    $("shelf-msg").textContent="此条已得，不须重翻。另寻一部典籍佐之。";
+    renderShelf(); save(); return;
+  }
+
+  if(isNeed){
+    S.itemNeed[it.id]=done.concat([entryId]);
+    var allDone=it.need.every(function(n){ return S.itemNeed[it.id].indexOf(n.entry)>=0; });
+    if(allDone){ S.itemState[it.id]="ok"; S.facts[it.yields]=true; if(S.help) delete S.help[it.id]; }
+    else { S.itemState[it.id]="partial"; }
+    closeMask("mask-shelf");
+    save();
+    showCard(entryId, it, allDone);
+  }else{
+    S.day--; if(S.day<0) S.day=0; S.miss++;
+    if(S.itemState[it.id]!=="ok") S.itemState[it.id]="doubt";
+    if(!S.help) S.help={};
+    S.help[it.id]=(S.help[it.id]||0)+1;
+    /* 逃生阀：时日耗尽时直接给到"该翻哪部书"，避免永久卡死 */
+    if(S.day<=0) S.help[it.id]=Math.max(S.help[it.id],3);
+    $("chip-day").textContent="时日："+S.day;
+    var hlv=S.help[it.id];
+    $("shelf-msg").textContent =
+        hlv>=5 ? "此条不合本案之验（误检，损时日一）。老吏索性把该翻的条目也点给你了——看绿框。"
+      : hlv>=3 ? "此条不合本案之验（误检，损时日一）。老吏提示：此目该翻的那部书，已用绿框标出。"
+      : S.day<=0 ? "时日已尽，此条仍不合。老吏看不过去，替你标了该翻的书——看绿框。"
+      : "此条不合本案之验（误检，损时日一）。再寻。";
+    renderShelf(); if(S.curBook) renderEntries(); save();
+  }
+}
+function showCard(entryId, it, allDone){
+  var c=CARDS[entryId]; if(!c) return;
+  var extra = allDone ? ('<div class="cy">→ 断语：'+it.fact+'</div>')
+                      : ('<div class="cy">→ 已得此据；此目尚需佐以'+(it.needHint?("「"+it.needHint+"」"):"另一部典籍")+'，再翻。</div>');
+  $("card").innerHTML='<div class="ct">'+c.title+' · 验得</div>'+
+    '<div class="cq">'+c.quote+'</div>'+
+    '<div class="cg">'+c.gist+'</div>'+
+    '<div class="cs"><span class="k">原理 ·</span> '+c.sci+'</div>'+ extra;
+  openMask("mask-card");
+}
+
+/* ============================================================ 结案 */
+function doVerdict(){
+  if(!S) return;                       /* 未开局（案由屏）时误触，不抛错 */
+  if(!allSlotsPicked()){
+    var m=$("msg"); if(m) m.textContent=verdictLackText();
+    var bv=$("btn-verdict"); if(bv) bv.title=verdictLackText();
+    return;
+  }
+  var allRight=SLOTS.every(function(sl){ return slotCorrect(sl.id); });
+  var lines=SLOTS.map(function(sl){
+    var bad=!allRight && !slotCorrect(sl.id);
+    return '<div class="li"><b>'+sl.label+'</b>：'+(S.picks[sl.id]||"—")+(bad?' <span class="tag doubt">存疑</span>':'')+'</div>';
+  }).join("");
+  if(allRight){
+    $("v-title").textContent="他杀焚尸";
+    $("v-sub").textContent="妻与奸夫共谋，钉入囟门致死，纵火焚尸以掩其迹；宅中有人为之内应。";
+    $("v-lines").innerHTML=lines+
+      '<div class="li" style="margin-top:10px;color:var(--ink2)">尸口鼻无灰、尸下土现鲜红，火焚于死后（《洗冤集录》）；剃髻得钉于囟门，致命之因在此；以赤油伞沃水验之，隐伤毕现，生前曾遭制伏（《梦溪笔谈》）。火可自燃，而本案火来骤急、用油有数，明为人为（《折狱龟鉴》《天工开物》）。凶徒借匠作之钉、宅中改置之壁，非独力所能为——必有内应。依《大明律》，谋杀一家者论死。</div>';
+  }else{
+    $("v-title").textContent="此判有疑";
+    $("v-sub").textContent="所填之判断，与案牍所载凿枘不合。标「存疑」者须再推。";
+    $("v-lines").innerHTML=lines+
+      '<div class="li" style="margin-top:10px;color:var(--zhu)">提示：断语须由「验得之事实」推出，不可由供词想当然。点下方「返回案牍」即可改判，取信不必重来。</div>';
+  }
+  $("btn-back").style.display = allRight ? "none" : "inline-block";
+  $("v-stat").innerHTML='误检 <b>'+S.miss+'</b> 处　·　余时日 <b>'+S.day+'</b>　·　取信验目 <b>'+
+     ITEMS.filter(function(x){return S.itemState[x.id]==="ok";}).length+'/12</b>';
+  show("scr-verdict");
+}
+
+/* ============================================================ 事件（委托；上溯取 data-*） */
+function attr(t,name){ var el=t&&t.closest?t.closest("["+name+"]"):null; return el?el.getAttribute(name):null; }
+document.addEventListener("click",function(ev){
+  var t=ev.target; if(!(t instanceof HTMLElement)) return;
+
+  var close=attr(t,"data-close"); if(close){ closeMask(close); if(close==="mask-shelf") renderDesk(); return; }
+  var bid=t.closest?t.closest("button[id]"):null; var id=bid?bid.id:t.id;
+
+  if(id==="btn-start"){
+    var hasProg = S && ITEMS.some(function(x){ return S.itemState[x.id]==="ok"; });
+    if(!hasProg) S=fresh();                 /* 已有进度时不重置，避免"存档被开始键抹掉" */
+    renderDesk(); show("scr-desk"); save(); return;
+  }
+  if(id==="btn-again"){ S=fresh(); renderDesk(); show("scr-case"); save(); return; }
+  if(id==="btn-reset"){
+    if(confirm("清空存档，从案由重新开始？")){
+      clearSave(); S=fresh(); renderDesk(); show("scr-case"); clearSave();
+    }
+    return;
+  }
+  if(id==="btn-back"){ renderDesk(); show("scr-desk"); return; }
+  if(id==="btn-card-ok"){ closeMask("mask-card"); renderDesk(); return; }
+  if(id==="btn-verdict"){ doVerdict(); return; }
+
+  var vb=attr(t,"data-verify"); if(vb){ openShelf(vb); return; }
+  var bk=attr(t,"data-book");   if(bk){ S.curBook=bk; $("shelf-msg").textContent=""; renderShelf(); renderEntries(); save(); return; }
+  var en=attr(t,"data-entry");  if(en){ pickEntry(en); return; }
+  var sl=attr(t,"data-slot");   if(sl){ S.picks[sl]=attr(t,"data-val"); renderDesk(); save(); return; }
+});
+
+/* ============================================================ 启动：有存档则恢复现场 */
+(function(){
+  if(!loadSave()) return;
+  renderDesk();
+  if(S.scr==="scr-verdict"){ doVerdict(); }
+  else { show(S.scr||"scr-desk"); }
+})();
+</script>
+</body>
+</html>
