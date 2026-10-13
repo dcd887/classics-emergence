@@ -110,10 +110,18 @@ button{font-family:inherit;cursor:pointer;}
 .verdict .lines .li{margin:6px 0;}
 .verdict .lines .li b{color:var(--zhu);font-weight:normal;font-family:"Kaiti SC",serif;}
 .stat{display:inline-block;margin:0 8px;font-size:13px;color:var(--ink2);}
+.btn.off{opacity:.45;}
+#btn-reset{position:fixed;right:9px;bottom:9px;z-index:60;background:none;border:0;padding:3px 6px;
+  font:11px/1.5 "Songti SC",serif;color:var(--faint);opacity:.42;cursor:pointer;letter-spacing:1px;}
+#btn-reset:hover{opacity:.95;text-decoration:underline;}
+.bk.hint{box-shadow:0 0 0 2px rgba(60,107,74,.22);}
+.ent.hint{box-shadow:0 0 0 2px rgba(60,107,74,.22);}
 </style>
 </head>
 <body>
 <div id="app">
+
+  <button id="btn-reset" title="清空存档，从案由重新开始">重置进度</button>
 
   <!-- 案由 -->
   <section class="screen active" id="scr-case">
@@ -148,7 +156,7 @@ button{font-family:inherit;cursor:pointer;}
     <div class="slots" id="slots"></div>
 
     <div class="foot">
-      <button class="btn" id="btn-verdict" disabled>落判</button>
+      <button class="btn" id="btn-verdict">落判</button>
       <span class="msg" id="msg"></span>
     </div>
   </section>
@@ -378,7 +386,21 @@ var VOLS = [
 
 /* ============================================================ 状态 */
 var S=null;
-function fresh(){ return { day:8, miss:0, facts:{}, itemState:{}, itemNeed:{}, picks:{}, curItem:null, curBook:null }; }
+function fresh(){ return { day:8, miss:0, facts:{}, itemState:{}, itemNeed:{}, picks:{}, help:{}, curItem:null, curBook:null, scr:"scr-case" }; }
+
+/* ============================================================ 存档 */
+var SAVE_KEY="yanhuo.save.v1";
+function save(){ try{ if(S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+function loadSave(){
+  try{
+    var raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+    var d=JSON.parse(raw); if(!d||typeof d!=="object"||!d.facts) return false;
+    var base=fresh();
+    for(var k in base){ if(!(k in d)) d[k]=base[k]; }
+    S=d; return true;
+  }catch(e){ return false; }
+}
 
 /* ============================================================ 工具 */
 function $(id){ return document.getElementById(id); }
@@ -386,6 +408,7 @@ function show(id){
   var a=document.querySelectorAll(".screen");
   for(var i=0;i<a.length;i++) a[i].classList.remove("active");
   $(id).classList.add("active"); window.scrollTo(0,0);
+  if(S){ S.scr=id; save(); }
 }
 function openMask(id){ $(id).classList.add("on"); }
 function closeMask(id){ $(id).classList.remove("on"); }
@@ -410,11 +433,25 @@ function slotReady(sl){
   return true;
 }
 function slotCorrect(id){
-  var sl=slotById(id), p=S.picks[id];
-  var o=null; sl.opts.forEach(function(x){ if(x.v===p) o=x; });
+  var sl=slotById(id); if(!sl) return false;
+  var p=S.picks[id], o=null;
+  sl.opts.forEach(function(x){ if(x.v===p) o=x; });
   return !!(o && o.ok);
 }
 function allSlotsPicked(){ return SLOTS.every(function(sl){ return !!S.picks[sl.id]; }); }
+function slotLack(sl){
+  var miss=sl.need.filter(function(f){ return !hasFact(f); });
+  if(miss.length) return "须先取信："+miss.map(factShort).join("、");
+  if(sl.after){
+    var w=sl.after.filter(function(id){ return !S.picks[id]; });
+    if(w.length) return "须先定前六槽（尚缺："+w.map(function(id){ return slotById(id).label; }).join("、")+"）";
+  }
+  return "尚不可定";
+}
+function verdictLackText(){
+  var lack=SLOTS.filter(function(sl){ return !S.picks[sl.id]; });
+  return "尚差 "+lack.length+" 槽："+lack.map(function(sl){ return sl.label+"（"+slotLack(sl)+"）"; }).join("；");
+}
 
 /* ============================================================ 渲染 · 案牍 */
 function renderDesk(){
@@ -464,8 +501,7 @@ function renderDesk(){
   SLOTS.forEach(function(sl){
     var ready=slotReady(sl);
     var d=document.createElement("div"); d.className="slot";
-    var hint = ready ? "" : '<span style="color:var(--faint)">（须先取信：'+
-       (sl.need.length? sl.need.map(factShort).join("、"): "前六槽皆已落定") +'）</span>';
+    var hint = ready ? "" : '<span style="color:var(--faint)">（'+slotLack(sl)+'）</span>';
     var opts=sl.opts.map(function(o){
       var on=(S.picks[sl.id]===o.v)?" on":"";
       return '<button class="opt'+on+'" data-slot="'+sl.id+'" data-val="'+o.v+'"'+(ready?"":" disabled")+'>'+o.v+'</button>';
@@ -473,7 +509,15 @@ function renderDesk(){
     d.innerHTML='<div class="st"><b>'+sl.label+'</b>　'+hint+'</div><div class="opts">'+opts+'</div>';
     s.appendChild(d);
   });
-  $("btn-verdict").disabled=!allSlotsPicked();
+  var btnV=$("btn-verdict"), msgEl=$("msg"), done=allSlotsPicked();
+  btnV.disabled=false;
+  if(done){ btnV.classList.remove("off"); btnV.title=""; if(msgEl) msgEl.textContent=""; }
+  else{
+    var lack=SLOTS.filter(function(sl){ return !S.picks[sl.id]; });
+    var full=verdictLackText();
+    btnV.classList.add("off"); btnV.title=full;
+    if(msgEl) msgEl.textContent="尚差 "+lack.length+" 槽："+lack[0].label+"（"+slotLack(lack[0])+"）"+(lack.length>1?" 等":"");
+  }
 }
 
 /* ============================================================ 渲染 · 掌故库 */
@@ -489,10 +533,14 @@ function openShelf(itemId){
 }
 function renderShelf(){
   var g=$("shelf"); g.innerHTML="";
+  var it=itemById(S.curItem), hlv=S.help[S.curItem]||0, needBook={};
+  if(it) it.need.forEach(function(n){ needBook[n.book]=true; });
+  var showBookHint = (hlv>=3);
   BOOKS.forEach(function(b){
     var btn=document.createElement("button");
-    btn.className="bk"+(S.curBook===b.id?" on":""); btn.setAttribute("data-book",b.id);
-    btn.innerHTML='<div class="bn">'+b.name+'</div><div class="bd">'+b.sub+'</div>';
+    var tip = (showBookHint && needBook[b.id]);
+    btn.className="bk"+(S.curBook===b.id?" on":"")+(tip?" hint":""); btn.setAttribute("data-book",b.id);
+    btn.innerHTML='<div class="bn">'+b.name+(tip?' <span style="color:var(--ok)">◈</span>':'')+'</div><div class="bd">'+b.sub+'</div>';
     g.appendChild(btn);
   });
 }
@@ -500,11 +548,15 @@ function renderEntries(){
   var b=bookById(S.curBook);
   $("entries-wrap").style.display="block";
   $("entries-head").textContent=b.name+" · 可查条目";
+  var it=itemById(S.curItem), hlv=S.help[S.curItem]||0, needEnt={};
+  if(it) it.need.forEach(function(n){ if(n.book===S.curBook) needEnt[n.entry]=true; });
+  var showEntHint=(hlv>=5);
   var g=$("entries"); g.innerHTML="";
   b.entries.forEach(function(e){
     var btn=document.createElement("button");
-    btn.className="ent"; btn.setAttribute("data-entry",e.id);
-    btn.innerHTML='<div class="et">'+e.title+'</div>';
+    var tip=(showEntHint && needEnt[e.id]);
+    btn.className="ent"+(tip?" hint":""); btn.setAttribute("data-entry",e.id);
+    btn.innerHTML='<div class="et">'+e.title+(tip?' <span style="color:var(--ok)">◈</span>':'')+'</div>';
     g.appendChild(btn);
   });
 }
@@ -515,19 +567,36 @@ function pickEntry(entryId){
   var isNeed=false;
   it.need.forEach(function(n){ if(n.book===S.curBook && n.entry===entryId) isNeed=true; });
   var done=S.itemNeed[it.id]||[];
-  if(isNeed && done.indexOf(entryId)<0){
+
+  /* 回头确认"已得"的同一条目：非误检，不损时日，不改状态 */
+  if(isNeed && done.indexOf(entryId)>=0){
+    $("shelf-msg").textContent="此条已得，不须重翻。另寻一部典籍佐之。";
+    renderShelf(); save(); return;
+  }
+
+  if(isNeed){
     S.itemNeed[it.id]=done.concat([entryId]);
     var allDone=it.need.every(function(n){ return S.itemNeed[it.id].indexOf(n.entry)>=0; });
-    if(allDone){ S.itemState[it.id]="ok"; S.facts[it.yields]=true; }
+    if(allDone){ S.itemState[it.id]="ok"; S.facts[it.yields]=true; if(S.help) delete S.help[it.id]; }
     else { S.itemState[it.id]="partial"; }
     closeMask("mask-shelf");
+    save();
     showCard(entryId, it, allDone);
   }else{
     S.day--; if(S.day<0) S.day=0; S.miss++;
     if(S.itemState[it.id]!=="ok") S.itemState[it.id]="doubt";
+    if(!S.help) S.help={};
+    S.help[it.id]=(S.help[it.id]||0)+1;
+    /* 逃生阀：时日耗尽时直接给到"该翻哪部书"，避免永久卡死 */
+    if(S.day<=0) S.help[it.id]=Math.max(S.help[it.id],3);
     $("chip-day").textContent="时日："+S.day;
-    $("shelf-msg").textContent="此条不合本案之验（误检，损时日一）。再寻。";
-    renderShelf();
+    var hlv=S.help[it.id];
+    $("shelf-msg").textContent =
+        hlv>=5 ? "此条不合本案之验（误检，损时日一）。老吏索性把该翻的条目也点给你了——看绿框。"
+      : hlv>=3 ? "此条不合本案之验（误检，损时日一）。老吏提示：此目该翻的那部书，已用绿框标出。"
+      : S.day<=0 ? "时日已尽，此条仍不合。老吏看不过去，替你标了该翻的书——看绿框。"
+      : "此条不合本案之验（误检，损时日一）。再寻。";
+    renderShelf(); if(S.curBook) renderEntries(); save();
   }
 }
 function showCard(entryId, it, allDone){
@@ -543,7 +612,13 @@ function showCard(entryId, it, allDone){
 
 /* ============================================================ 结案 */
 function doVerdict(){
-  var allRight=SLOTS.every(slotCorrect);
+  if(!S) return;                       /* 未开局（案由屏）时误触，不抛错 */
+  if(!allSlotsPicked()){
+    var m=$("msg"); if(m) m.textContent=verdictLackText();
+    var bv=$("btn-verdict"); if(bv) bv.title=verdictLackText();
+    return;
+  }
+  var allRight=SLOTS.every(function(sl){ return slotCorrect(sl.id); });
   var lines=SLOTS.map(function(sl){
     var bad=!allRight && !slotCorrect(sl.id);
     return '<div class="li"><b>'+sl.label+'</b>：'+(S.picks[sl.id]||"—")+(bad?' <span class="tag doubt">存疑</span>':'')+'</div>';
@@ -573,17 +648,35 @@ document.addEventListener("click",function(ev){
   var close=attr(t,"data-close"); if(close){ closeMask(close); if(close==="mask-shelf") renderDesk(); return; }
   var bid=t.closest?t.closest("button[id]"):null; var id=bid?bid.id:t.id;
 
-  if(id==="btn-start"){ S=fresh(); renderDesk(); show("scr-desk"); return; }
-  if(id==="btn-again"){ S=fresh(); renderDesk(); show("scr-case"); return; }
+  if(id==="btn-start"){
+    var hasProg = S && ITEMS.some(function(x){ return S.itemState[x.id]==="ok"; });
+    if(!hasProg) S=fresh();                 /* 已有进度时不重置，避免"存档被开始键抹掉" */
+    renderDesk(); show("scr-desk"); save(); return;
+  }
+  if(id==="btn-again"){ S=fresh(); renderDesk(); show("scr-case"); save(); return; }
+  if(id==="btn-reset"){
+    if(confirm("清空存档，从案由重新开始？")){
+      clearSave(); S=fresh(); renderDesk(); show("scr-case"); clearSave();
+    }
+    return;
+  }
   if(id==="btn-back"){ renderDesk(); show("scr-desk"); return; }
   if(id==="btn-card-ok"){ closeMask("mask-card"); renderDesk(); return; }
   if(id==="btn-verdict"){ doVerdict(); return; }
 
   var vb=attr(t,"data-verify"); if(vb){ openShelf(vb); return; }
-  var bk=attr(t,"data-book");   if(bk){ S.curBook=bk; $("shelf-msg").textContent=""; renderShelf(); renderEntries(); return; }
+  var bk=attr(t,"data-book");   if(bk){ S.curBook=bk; $("shelf-msg").textContent=""; renderShelf(); renderEntries(); save(); return; }
   var en=attr(t,"data-entry");  if(en){ pickEntry(en); return; }
-  var sl=attr(t,"data-slot");   if(sl){ S.picks[sl]=attr(t,"data-val"); renderDesk(); return; }
+  var sl=attr(t,"data-slot");   if(sl){ S.picks[sl]=attr(t,"data-val"); renderDesk(); save(); return; }
 });
+
+/* ============================================================ 启动：有存档则恢复现场 */
+(function(){
+  if(!loadSave()) return;
+  renderDesk();
+  if(S.scr==="scr-verdict"){ doVerdict(); }
+  else { show(S.scr||"scr-desk"); }
+})();
 </script>
 </body>
 </html>
