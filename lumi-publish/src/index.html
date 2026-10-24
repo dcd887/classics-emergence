@@ -906,19 +906,40 @@ document.addEventListener("click",function(ev){
     log("item", "  · " + it.name + "（" + VOL_NAME[it.vol] + "）取信 ✓ " + chipProg() + " · " + chipDay());
   }
 
+  /* ---------- 回到案牍：只在真实可见的按钮上点，兼容旧存档 ---------- */
+  async function ensureDesk() {
+    var deskOn = document.getElementById("scr-desk").classList.contains("active");
+    if (deskOn) {
+      log("screen", "已在案牍（旧存档续跑）· " + chipProg() + " · " + chipDay());
+      return;
+    }
+    if (document.getElementById("scr-verdict").classList.contains("active")) {
+      var again = document.getElementById("btn-again");
+      var ra = again ? again.getBoundingClientRect() : null;
+      if (!again || ra.width <= 0) throw new Error("判词页的「重验一遍」不可见");
+      log("screen", "检测到页面停在判词页（旧存档）：先真实点击「重验一遍」回到案由");
+      realClick(again, "重验一遍");
+      await sleep(STEP + 150);
+    }
+    var bStart = document.getElementById("btn-start");
+    var r = bStart ? bStart.getBoundingClientRect() : null;
+    if (!bStart || r.width <= 0 || r.height <= 0) {
+      throw new Error("案由屏「升堂验尸」不可见（页面停在未知状态）——请用 #auto=full&fresh 重新加载");
+    }
+    realClick(bStart, "案由·升堂验尸");
+    await sleep(STEP + 150);
+    if (!document.getElementById("scr-desk").classList.contains("active")) throw new Error("升堂后未进入案牍");
+    log("screen", "案牍已开 · " + chipProg() + " · " + chipDay());
+  }
+
   /* ---------- 主流程 ---------- */
   async function run() {
     M.env = { ua: navigator.userAgent, vw: innerWidth, vh: innerHeight, tz: (new Date()).getTimezoneOffset() };
     log("start", "自测启动 #auto=full" + (FRESH ? "&fresh" : "") + " · 门禁通过 · 初始签名 " + sig());
     await sleep(200);
 
-    /* 0) 案由 → 升堂 */
-    var bStart = document.getElementById("btn-start");
-    if (!bStart) throw new Error("找不到 #btn-start");
-    realClick(bStart, "案由·升堂验尸");
-    await sleep(STEP + 150);
-    if (!document.getElementById("scr-desk").classList.contains("active")) throw new Error("升堂后未进入案牍");
-    log("screen", "案牍已开 · " + chipProg() + " · " + chipDay());
+    /* 0) 案由 → 升堂（或从旧存档现场接续） */
+    await ensureDesk();
 
     /* 1) 十二验目（按卷推进） */
     var vols = {};
