@@ -670,6 +670,364 @@ document.addEventListener("click",function(ev){
   var sl=attr(t,"data-slot");   if(sl){ S.picks[sl]=attr(t,"data-val"); renderDesk(); save(); return; }
 });
 
+/* ---- 以下为 #auto=full 自测入口（仅带该 hash 时激活） ---- */
+/* ============================================================
+   自测入口 · 仅在 URL 带 #auto=full 时激活（硬门禁，见下第一行）
+   ------------------------------------------------------------
+   与硬要求一一对应的四条设计约束：
+   1) 门禁：location.hash 不匹配 auto=full 时，本段一行都不执行，
+      正常访问的 DOM / 存档 / 控制台与改动前完全一致。
+   2) 只点真元素：所有推进都是对「页面上真实按钮」按几何中心点派发
+      pointerdown / mousedown / pointerup / mouseup / click 五连真实鼠标
+      事件，命中节点由 document.elementFromPoint 取；不调用游戏内部
+      函数（pickEntry / doVerdict / renderDesk…），不读写内部变量 S。
+   3) 答案不放水：正解写在测试夹具 EXPECT 里（书 id、条目 id、七槽选项），
+      hook 不读 ITEMS / SLOTS / CARDS 数据；选错即抛错，绝不"填满即过"。
+   4) 证据留痕：每一步后计算状态签名（DOM 长度 + localStorage 全文校验和），
+      签名不变即记入 stuck；每卷 / 每槽 / 每目都写时间戳，最后写
+      localStorage 完成标记 yanhuo.autotest.v1。
+   ============================================================ */
+(function () {
+  var HASH = location.hash || "";
+  if (!/(?:^|[#&])auto=full(?:&|$)/.test(HASH)) return;   /* ← 门禁：非 #auto=full 一律不激活 */
+
+  var SAVE_KEY = "yanhuo.save.v1";
+  var TEST_KEY = "yanhuo.autotest.v1";
+  var FRESH = /(?:^|[#&])fresh(?:&|$)/.test(HASH);
+  var SLOWM = /(?:^|[#&])slow=(\d+)/.exec(HASH);
+  var STEP = SLOWM ? Math.max(60, parseInt(SLOWM[1], 10)) : 150;
+
+  /* &fresh：清掉旧存档（本段同步执行，早于下方 boot IIFE 的 loadSave） */
+  if (FRESH) {
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(TEST_KEY); } catch (e) {}
+  }
+
+  var T0 = Date.now();
+  var M = {
+    hook: "yanhuo-auto-full/1",
+    url: location.href,
+    hash: HASH,
+    fresh: FRESH,
+    startedAt: new Date().toISOString(),
+    ok: false,
+    error: null,
+    answerSource: "fixture:EXPECT（本案正解内置）· 不读 ITEMS/SLOTS",
+    steps: { attempted: 0, done: 0, coordHit: 0, fallback: 0 },
+    misdetect: { count: 0, at: [] },
+    vols: {},
+    slots: {},
+    sigCheck: { total: 0, changed: 0, stuck: [] },
+    events: []
+  };
+
+  function nowMs() { return Date.now() - T0; }
+  function iso() { return new Date().toISOString(); }
+  function persist() {
+    try { M.updatedAt = iso(); localStorage.setItem(TEST_KEY, JSON.stringify(M)); } catch (e) {}
+  }
+  function log(kind, msg, extra) {
+    console.log("[AUTO] " + msg);
+    M.events.push({ t: nowMs(), kind: kind, msg: msg, extra: extra || null });
+    if (M.events.length > 600) M.events.splice(0, 200);
+    persist();
+  }
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---------- 状态签名：DOM 长度 + localStorage 全文校验和 ---------- */
+  function sig() {
+    var ls = "";
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k === TEST_KEY) continue;              /* 排除自测自己的写入 */
+        ls += k + "=" + (localStorage.getItem(k) || "") + "\u0001";
+      }
+    } catch (e) {}
+    var h = 0;
+    for (var j = 0; j < ls.length; j++) { h = (h * 31 + ls.charCodeAt(j)) | 0; }
+    var dom = document.body ? document.body.innerHTML.length : 0;
+    return "D" + dom + "·L" + ls.length + "·H" + (h >>> 0).toString(36);
+  }
+  var lastSig = null, lastSigLabel = null;
+  function checkSig(label) {
+    var s = sig();
+    M.sigCheck.total++;
+    if (lastSig !== null && s === lastSig) {
+      M.sigCheck.stuck.push({ after: label, prev: lastSigLabel, sig: s, t: nowMs() });
+      console.warn("[AUTO] ⚠ 状态签名未变：" + (lastSigLabel || "?") + " → " + label + "（" + s + "）");
+    } else if (lastSig !== null) {
+      M.sigCheck.changed++;
+    }
+    lastSig = s; lastSigLabel = label;
+    return s;
+  }
+
+  /* ---------- 真实鼠标点击：坐标命中 + 五连事件 ---------- */
+  function bringIntoView(el) {
+    function hitInside() {
+      var r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      var h = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      return !!(h && (h === el || el.contains(h)));
+    }
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (e) {}
+    var sheet = el.closest ? el.closest(".sheet") : null;
+    for (var i = 0; i < 3; i++) {
+      if (hitInside()) return true;
+      if (!sheet) break;
+      var r = el.getBoundingClientRect(), sr = sheet.getBoundingClientRect();
+      var dy = (r.top + r.height / 2) - (sr.top + sr.height / 2);
+      if (!dy) break;
+      sheet.scrollTop += Math.round(dy);
+    }
+    return hitInside();
+  }
+  function realClick(el, label) {
+    if (!el) throw new Error("找不到元素：" + label);
+    var coordHit = bringIntoView(el);
+    var r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) throw new Error("元素不可见（0 尺寸）：" + label);
+    var x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+    var hit = document.elementFromPoint(x, y);
+    var target = el;
+    if (hit && (hit === el || el.contains(hit))) target = hit;
+    var base = {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      clientX: x, clientY: y, screenX: x, screenY: y, button: 0, detail: 1
+    };
+    function mk(Ctor, name, extra) {
+      var o = {}; for (var k in base) o[k] = base[k];
+      if (extra) for (var k2 in extra) o[k2] = extra[k2];
+      return new Ctor(name, o);
+    }
+    var pe = { pointerId: 1, pointerType: "mouse", isPrimary: true, width: 1, height: 1, pressure: 0.5, buttons: 1 };
+    var seq = [
+      mk(PointerEvent, "pointerdown", pe),
+      mk(MouseEvent, "mousedown", { buttons: 1 }),
+      mk(PointerEvent, "pointerup", { pointerId: 1, pointerType: "mouse", isPrimary: true, width: 1, height: 1, pressure: 0, buttons: 0 }),
+      mk(MouseEvent, "mouseup", { buttons: 0 }),
+      mk(MouseEvent, "click", { buttons: 0, detail: 1 })
+    ];
+    M.steps.attempted++;
+    if (coordHit) M.steps.coordHit++; else M.steps.fallback++;
+    for (var i = 0; i < seq.length; i++) target.dispatchEvent(seq[i]);
+    M.steps.done++;
+    checkSig(label + (coordHit ? "" : " [兜底派发]"));
+    persist();
+    return target;
+  }
+
+  function q(sel) { return document.querySelector(sel); }
+  function txt(el) { return el ? (el.textContent || "").replace(/\s+/g, " ").trim() : ""; }
+  function findOpt(slotId, want) {
+    var a = document.querySelectorAll('[data-slot="' + slotId + '"]'), pre = null;
+    for (var i = 0; i < a.length; i++) {
+      var t = txt(a[i]);
+      if (t === want) return a[i];
+      if (pre === null && t.indexOf(want) === 0) pre = a[i];
+    }
+    return pre;
+  }
+  function saveObj() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch (e) { return null; } }
+  function chipProg() { return txt(document.getElementById("chip-prog")); }
+  function chipDay() { return txt(document.getElementById("chip-day")); }
+  function factsOk() {
+    var s = saveObj() || {}, n = 0;
+    for (var i = 1; i <= 12; i++) if (s.facts && s.facts["f" + i] === true) n++;
+    return n;
+  }
+
+  /* ---------- 测试夹具：本案正解（不读游戏内部数据） ---------- */
+  var EXPECT_ITEM = [
+    { id: "i1",  vol: 1, name: "目一",  need: [["xyjl", "e-fire"]] },
+    { id: "i2",  vol: 1, name: "目二",  need: [["xyjl", "e-nail"]] },
+    { id: "i3",  vol: 1, name: "目三",  need: [["mxsb", "e-umb"]] },
+    { id: "i4",  vol: 1, name: "目四",  need: [["zygj", "e-linan"]] },
+    { id: "i5",  vol: 2, name: "目五",  need: [["zygj", "e-cheng"]] },
+    { id: "i6",  vol: 2, name: "目六",  need: [["zygj", "e-oil"]] },
+    { id: "i7",  vol: 2, name: "目七",  need: [["xyjl", "e-blood"]] },
+    { id: "i8",  vol: 2, name: "目八",  need: [["yzfs", "e-wall"]] },
+    { id: "i9",  vol: 3, name: "目九",  need: [["zgj", "e-six"]] },
+    { id: "i10", vol: 3, name: "目十",  need: [["tgkw", "e-oilrate"], ["jzss", "e-ratio"]] },
+    { id: "i11", vol: 3, name: "目十一", need: [["qmys", "e-candle"], ["zy", "e-ligua"]] },
+    { id: "i12", vol: 3, name: "目十二", need: [["tybs", "e-law"]] }
+  ];
+  var EXPECT_SLOT = [
+    { id: "s1", label: "焚尸先后", want: "死后焚尸" },
+    { id: "s2", label: "致命之因", want: "钉入囟门" },
+    { id: "s3", label: "火起之因", want: "人为纵火灭迹" },
+    { id: "s4", label: "凶器",     want: "匠作大钉" },
+    { id: "s5", label: "主谋",     want: "其妻与奸夫" },
+    { id: "s6", label: "内应",     want: "宅中之人" },
+    { id: "s7", label: "引律",     want: "依《大明律》谋杀（杀一家者论死）" }
+  ];
+  var VOL_NAME = { 1: "卷一·验尸", 2: "卷二·验火", 3: "卷三·验心" };
+
+  /* ---------- 单目：翻书 → 选条 → 记入案牍 ---------- */
+  async function solveItem(it) {
+    var missBefore = (saveObj() || {}).miss || 0;
+    for (var r = 0; r < it.need.length; r++) {
+      var btn = q('[data-verify="' + it.id + '"]');
+      if (!btn) break;                                   /* 已取信：无「翻书」按钮 */
+      var btnTxt = txt(btn);
+      if (btn.disabled) throw new Error(it.name + " 的「" + btnTxt + "」被禁用：前置验目未满（" + txt(btn.parentElement) + "）");
+      realClick(btn, it.name + "·" + btnTxt);
+      await sleep(STEP);
+
+      var pair = it.need[r];
+      var bkBtn = q('#shelf [data-book="' + pair[0] + '"]');
+      if (!bkBtn) throw new Error(it.name + " 掌故库里没有书 " + pair[0]);
+      var bkName = txt(bkBtn.querySelector(".bn"));
+      realClick(bkBtn, it.name + " 翻《" + bkName + "》");
+      await sleep(STEP);
+
+      var entBtn = q('#entries [data-entry="' + pair[1] + '"]');
+      if (!entBtn) throw new Error("《" + bkName + "》内无条目 " + pair[1] + "（" + it.name + "）");
+      var entName = txt(entBtn.querySelector(".et"));
+      realClick(entBtn, it.name + " 选「" + entName + "」");
+      await sleep(STEP);
+
+      var okBtn = document.getElementById("btn-card-ok");
+      if (!okBtn) {
+        log("warn", "  · " + it.name + " 第 " + (r + 1) + " 部：「" + entName + "」未出现原文卡（此据或已得），按已得处理");
+        continue;
+      }
+      realClick(okBtn, it.name + " 记入案牍");
+      await sleep(STEP);
+    }
+    var s = saveObj() || {}, n = parseInt(it.id.slice(1), 10);
+    if (!(s.facts && s.facts["f" + n] === true)) throw new Error(it.name + " 未取信：facts.f" + n + " 不是 true（" + chipProg() + "）");
+    if (s.itemState && s.itemState[it.id] !== "ok") throw new Error(it.name + " 状态不是 ok，而是 " + s.itemState[it.id]);
+    if ((s.miss || 0) !== missBefore) {
+      M.misdetect.at.push({ item: it.id, name: it.name, miss: s.miss, t: nowMs(), atISO: iso() });
+      log("warn", "  · " + it.name + " 期间误检数由 " + missBefore + " 变为 " + s.miss);
+    }
+    log("item", "  · " + it.name + "（" + VOL_NAME[it.vol] + "）取信 ✓ " + chipProg() + " · " + chipDay());
+  }
+
+  /* ---------- 主流程 ---------- */
+  async function run() {
+    M.env = { ua: navigator.userAgent, vw: innerWidth, vh: innerHeight, tz: (new Date()).getTimezoneOffset() };
+    log("start", "自测启动 #auto=full" + (FRESH ? "&fresh" : "") + " · 门禁通过 · 初始签名 " + sig());
+    await sleep(200);
+
+    /* 0) 案由 → 升堂 */
+    var bStart = document.getElementById("btn-start");
+    if (!bStart) throw new Error("找不到 #btn-start");
+    realClick(bStart, "案由·升堂验尸");
+    await sleep(STEP + 150);
+    if (!document.getElementById("scr-desk").classList.contains("active")) throw new Error("升堂后未进入案牍");
+    log("screen", "案牍已开 · " + chipProg() + " · " + chipDay());
+
+    /* 1) 十二验目（按卷推进） */
+    var vols = {};
+    for (var i = 0; i < EXPECT_ITEM.length; i++) {
+      var it = EXPECT_ITEM[i];
+      if (!vols[it.vol]) {
+        vols[it.vol] = { vol: it.vol, name: VOL_NAME[it.vol], items: [], startedAt: nowMs(), startedAtISO: iso(), doneAt: null, doneAtISO: null, ms: null };
+        log("vol", "▶ 开卷 " + VOL_NAME[it.vol] + " · " + chipProg() + " · t=" + nowMs() + "ms");
+      }
+      await solveItem(it);
+      vols[it.vol].items.push(it.id);
+      var lastOfVol = (i === EXPECT_ITEM.length - 1) || (EXPECT_ITEM[i + 1].vol !== it.vol);
+      if (lastOfVol) {
+        vols[it.vol].doneAt = nowMs();
+        vols[it.vol].doneAtISO = iso();
+        vols[it.vol].ms = vols[it.vol].doneAt - vols[it.vol].startedAt;
+        M.vols[it.vol] = vols[it.vol];
+        log("vol", "✔ 卷末 " + VOL_NAME[it.vol] + " 验毕 " + vols[it.vol].items.length + "/4 目 · 取信 " + factsOk() + "/12 · 用时 " + (vols[it.vol].ms / 1000).toFixed(1) + "s");
+        persist();
+      }
+    }
+    if (factsOk() !== 12) throw new Error("十二验目未全部取信（实得 " + factsOk() + "/12）");
+
+    /* 2) 结案七槽：按正解逐个点选（s7 须待前六槽落定，故顺序即 s1→s7） */
+    log("slots", "七槽开始 · " + chipProg() + " · 十二验目已取信");
+    for (var k = 0; k < EXPECT_SLOT.length; k++) {
+      var sl = EXPECT_SLOT[k];
+      var optBtn = findOpt(sl.id, sl.want);
+      if (!optBtn) throw new Error("槽 " + sl.label + " 找不到选项「" + sl.want + "」");
+      if (optBtn.disabled) throw new Error("槽 " + sl.label + " 选项「" + sl.want + "」仍被禁用（" + txt(optBtn.closest(".slot")) + "）");
+      realClick(optBtn, "七槽[" + (k + 1) + "/7] " + sl.label + "=" + sl.want);
+      await sleep(STEP);
+
+      var onEl = q('[data-slot="' + sl.id + '"].on');
+      var s2 = saveObj() || {};
+      var picked = (s2.picks && s2.picks[sl.id]) || "";
+      M.slots[sl.id] = {
+        idx: k + 1, label: sl.label, want: sl.want, picked: picked,
+        onText: txt(onEl), correct: picked === sl.want,
+        at: nowMs(), atISO: iso()
+      };
+      persist();
+      if (picked !== sl.want) throw new Error("槽 " + sl.label + " 选取不符：期望「" + sl.want + "」，实际「" + picked + "」");
+      log("slot", "  · 七槽[" + (k + 1) + "/7] " + sl.label + " = " + txt(onEl) + " ✓（存档 picks." + sl.id + " 一致）");
+    }
+
+    /* 3) 落判 */
+    var bv = document.getElementById("btn-verdict");
+    var preMsg = txt(document.getElementById("msg"));
+    if (bv.classList.contains("off") || preMsg) throw new Error("落判按钮仍不可用：「" + preMsg + "」");
+    realClick(bv, "落判");
+    await sleep(STEP + 200);
+
+    var title = txt(document.getElementById("v-title"));
+    var back = document.getElementById("btn-back");
+    var sub = txt(document.getElementById("v-sub"));
+    var lines = txt(document.getElementById("v-lines"));
+    var stat = txt(document.getElementById("v-stat"));
+    var scrOn = document.getElementById("scr-verdict").classList.contains("active");
+    var hasDoubt = /存疑/.test(lines);
+    /* #v-title 与 #btn-back 在源 HTML 里就有默认值（"他杀焚尸" / display:none），
+       单看它们可能是假阳性；故同时要求：判词页已激活、#v-stat 已被 doVerdict 写入、
+       判词行里七槽标签齐全。 */
+    var liLabels = [];
+    var lis = document.querySelectorAll("#v-lines .li b");
+    for (var z = 0; z < lis.length; z++) liLabels.push(txt(lis[z]));
+    var statWritten = /误检\s*\d+\s*处/.test(stat);
+    var allLabels = EXPECT_SLOT.every(function (x) { return liLabels.indexOf(x.label) >= 0; });
+    M.verdict = {
+      title: title, sub: sub.slice(0, 60), stat: stat, screenActive: scrOn,
+      backButtonHidden: back ? back.style.display === "none" : null,
+      anyDoubtTag: hasDoubt, statWritten: statWritten,
+      lineLabels: liLabels, allSlotLabelsInLines: allLabels,
+      linesLen: lines.length, at: nowMs(), atISO: iso()
+    };
+    if (!scrOn) throw new Error("落判后未进入判词页");
+    if (!statWritten) throw new Error("判词页 #v-stat 未被写入（doVerdict 未走到结案分支）：「" + stat + "」");
+    if (!allLabels) throw new Error("判词行缺槽位标签：" + liLabels.join("/"));
+    if (hasDoubt) throw new Error("判词里仍有「存疑」标记：" + lines.slice(0, 120));
+    if (title !== "他杀焚尸") throw new Error("判词标题不是「他杀焚尸」，而是「" + title + "」");
+    if (back && back.style.display !== "none") throw new Error("判词页仍露出「返回案牍·改判」（= 七槽未全对）");
+    if (!/取信验目\s*12\/12/.test(stat)) throw new Error("判词统计不是 12/12：" + stat);
+
+    /* 4) 完成标记 */
+    var s3 = saveObj() || {};
+    M.misdetect.count = s3.miss || 0;
+    M.finalSave = s3;
+    M.summary = { items: 12, slots: 7, allCorrect: true, verdict: title, stat: stat };
+    M.ok = true;
+    M.finishedAt = iso();
+    M.durationMs = nowMs();
+    persist();
+    log("done", "==== 七槽填齐、落判成功 · " + title + " · 误检 " + M.misdetect.count + " 次 · 真实点击 " + M.steps.done + " 步（坐标命中 " + M.steps.coordHit + " / 兜底 " + M.steps.fallback + "）· 签名变化 " + M.sigCheck.changed + "/" + M.sigCheck.total + " · 总用时 " + (M.durationMs / 1000).toFixed(1) + "s ====");
+    console.log("__AUTO_RESULT__ " + JSON.stringify({
+      ok: true, steps: M.steps, sigCheck: M.sigCheck, misdetect: M.misdetect.count,
+      verdict: title, durationMs: M.durationMs, slots: M.slots, vols: M.vols
+    }));
+  }
+
+  run().catch(function (e) {
+    M.ok = false;
+    M.error = String((e && e.message) || e);
+    M.failedAt = nowMs();
+    log("fail", "✗ 自测中断（t=" + M.failedAt + "ms）：" + M.error);
+    persist();
+    console.error("__AUTO_RESULT__ " + JSON.stringify({ ok: false, error: M.error, steps: M.steps, vols: M.vols, slots: M.slots }));
+  });
+})();
+
 /* ============================================================ 启动：有存档则恢复现场 */
 (function(){
   if(!loadSave()) return;
